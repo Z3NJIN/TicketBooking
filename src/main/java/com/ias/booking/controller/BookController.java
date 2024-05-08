@@ -2,8 +2,13 @@ package com.ias.booking.controller;
 
 import com.ias.booking.exceptions.BookNotFoundException;
 import com.ias.booking.model.Book;
+import com.ias.booking.model.Status;
 import com.ias.booking.repository.BookRepository;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.hateoas.MediaTypes;
+import org.springframework.hateoas.mediatype.problem.Problem;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,24 +46,25 @@ class BookController {
                 .orElseThrow(() -> new BookNotFoundException(id));
     }
 
-    //Actualizar reserva
-    @PutMapping("/books/{id}")
-    Book replaceEmployee(@RequestBody Book newBook, @PathVariable Long id) {
-        return repository.findById(id)
-                .map(book -> {
-                    book.setUserId(newBook.getUserId());
-                    book.setFlightId(newBook.getFlightId());
-                    book.setStatus(newBook.getStatus());
-                    return repository.save(book);
-                })
-                .orElseGet(() -> {
-                    newBook.setId(id);
-                    return repository.save(newBook);
-                });
+    //Cancelar reserva
+    @PutMapping("/books/{id}/cancel")
+    ResponseEntity<?> replaceEmployee(@PathVariable Long id) {
+
+        Book book = repository.findById(id)
+                .orElseThrow(() -> new BookNotFoundException(id));
+
+        //Se valida que solo se puedan cancelar reservas en progreso
+        if (book.getStatus() == Status.IN_PROGRESS) {
+            book.setStatus(Status.CANCELLED);
+            return ResponseEntity.ok(repository.save(book));
+        }
+
+        return ResponseEntity //
+                .status(HttpStatus.METHOD_NOT_ALLOWED) //
+                .header(HttpHeaders.CONTENT_TYPE, MediaTypes.HTTP_PROBLEM_DETAILS_JSON_VALUE) //
+                .body(Problem.create() //
+                        .withTitle("Method not allowed") //
+                        .withDetail("No puedes cancelar una reserva en estado: " + book.getStatus()));
     }
 
-    @DeleteMapping("/books/{id}")
-    void deleteEmployee(@PathVariable Long id) {
-        repository.deleteById(id);
-    }
 }
